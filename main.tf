@@ -53,3 +53,94 @@ resource "aws_subnet" "Demo-subnet" {
     }
   
 }
+
+#Setting up internet gateway for demo
+resource "aws_internet_gateway" "Demo-gateway" {
+  vpc_id = aws_vpc.Demo-vpc.id
+
+  tags = {
+    Name = "LP-demoGATEWAY"
+  }
+}
+
+#Setting up route table for demo
+resource "aws_route_table" "Demo-route-table" {
+  vpc_id = aws_vpc.Demo-vpc.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.Demo-gateway.id
+  }
+
+  route {
+    ipv6_cidr_block        = "::/0"
+    egress_only_gateway_id = aws_internet_gateway.Demo-gateway.id
+  }
+
+  tags = {
+    Name = "LP-demoROUTE"
+  }
+}
+
+#Associating the route table with the subnet
+resource "aws_route_table_association" "Demo-RT-Association" {
+  subnet_id      = aws_subnet.Demo-subnet.id
+  route_table_id = aws_route_table.Demo-route-table.id
+}
+
+
+#Creating security group for SSH/web traffic
+resource "aws_security_group" "Demo-allow-traffic" {
+  name        = "allow-SSH-web"
+  description = "Allow HTTP and SSH"
+  vpc_id      = aws_vpc.Demo-vpc.id
+
+  ingress {
+    description      = "HTTP from VPC"
+    from_port        = 80
+    to_port          = 80
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    description      = "SSH from VPC"
+    from_port        = 22
+    to_port          = 22
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  tags = {
+    Name = "LP-allow-SSH-web"
+  }
+}
+
+#Setting up network interface for demo
+resource "aws_network_interface" "Demo-NIC" {
+  subnet_id       = aws_subnet.Demo-subnet.id
+  private_ips     = ["21.0.1.21"]
+  security_groups = [aws_security_group.Demo-allow-traffic.id]
+
+#  attachment {
+#    instance     = aws_instance.test.id
+#    device_index = 1
+#  }
+}
+
+#Setting up the elastice IP for demo
+resource "aws_eip" "Demo-EIP" {
+  vpc                       = true
+  network_interface         = aws_network_interface.Demo-NIC.id
+  associate_with_private_ip = "21.0.1.21"
+}
